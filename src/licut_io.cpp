@@ -272,7 +272,7 @@ int LicutIO::ReadCmdReply( int verbose )
 			if (bytesToRead > sizeof(binbuf))
 			{
 				printf( "%s() WARNING: truncating bytes to read from %d to %d\n",
-					__FUNCTION__, bytesToRead, sizeof(binbuf) );
+					__FUNCTION__, bytesToRead, (int) sizeof(binbuf) );
 				bytesToRead = sizeof(binbuf);
 			}
 			res = read( m_handle, binbuf, bytesToRead );

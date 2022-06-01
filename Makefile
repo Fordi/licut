@@ -1,7 +1,7 @@
 # $Id: Makefile 5 2011-01-31 03:48:23Z henry_groover $
 # Makefile for licut
 
-OUTPUT:=../output
+OUTPUT:=./output
 HOST_TARGET:=$(shell uname -m)-$(shell uname -s | tr 'L' 'l')
 # Override TARGET for cross-compile
 TARGET:=${HOST_TARGET}
@@ -10,15 +10,13 @@ ifeq (${TARGET},arm-linux)
 TGT:=arm-linux-
 endif
 PACKAGE:=${OUTPUT}/licut-${TARGET}.tgz
-SOURCES:=$(wildcard *.cpp)
+SOURCES:=$(wildcard src/*.cpp)
 BINDIR:=${TARGET}/bin
 OBJDIR:=${TARGET}/obj
 LIBDIR:=
 OBJS:=$(patsubst %.cpp,${OBJDIR}/%.o,${SOURCES})
-#GFLAGS_LIB:=/usr/local/lib/libgflags_nothreads.a
 LIBS:=${GFLAGS_LIB}
 LIB_PATHS:=$(addprefix ${LIBDIR}/,${LIBS})
-#LDFLAGS += -L${LIBDIR} $(addprefix -l,$(patsubst lib%,%,${LIBS}))
 LDFLAGS += -lgflags ${LIB_PATHS}
 CFLAGS += -lgflags
 
@@ -28,16 +26,19 @@ LICUT:=${TARGET}/bin/licut
 all: ${PACKAGE}
 
 ${PACKAGE}: ${LICUT} ${OUTPUT} ${OUTPUT}/${TARGET}
-	cp ${LICUT} ${OUTPUT}/${TARGET}; svn export --force ../doc ${OUTPUT}/${TARGET}/doc; cd ${OUTPUT}/${TARGET}; tar czf ../$(@F) *
+	cp ${LICUT} ${OUTPUT}/${TARGET};
+	cp *.md ${OUTPUT}/${TARGET}
+	# svn export --force ../doc ${OUTPUT}/${TARGET}/doc;
+	tar czf ${OUTPUT}/$(@F) -C ${OUTPUT}/${TARGET} licut README.md Using_Inkscape.md
 	@ls -l $@
 
 ${OUTPUT} ${OUTPUT}/${TARGET} ${LIBDIR}:
 	mkdir -p $@
 
 clean:
-	rm -f ${LICUT} ${OBJS} ${PACKAGE}
+	rm -rf ${LICUT} ${OBJS} ${PACKAGE} ${TARGET} output
 
-.PHONY: all clean
+.PHONY: all clean install uninstall
 
 ${LICUT}: ${OBJS} ${LIB_PATHS}
 	@mkdir -p $(dir $@)
@@ -49,14 +50,8 @@ ${OBJDIR}/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	${TGT}${CXX} ${CFLAGS} ${CPPFLAGS} -c -o $@ $<
 
-#ifneq (${SKIP_LIB},1)
-#${LIBDIR}/${GFLAGS_LIB}: google-gflags/.libs/${GFLAGS_LIB}
-#	cp -p -P google-gflags/.libs/*.so* google-gflags/.libs/*.a ${LIBDIR}/
-#	@touch $@
-#endif
+install: ${LICUT}
+	cp ${LICUT} /usr/local/bin
 
-#google-gflags/.libs/${GFLAGS_LIB}: config-google-gflags-${TARGET} ${LIBDIR}
-#	make -C google-gflags
-
-#include google-gflags.mak
-
+uninstall:
+	rm -f /usr/local/bin/licut

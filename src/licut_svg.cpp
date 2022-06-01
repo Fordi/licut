@@ -112,7 +112,7 @@ int LicutSVG::Parse( const char *svgPath )
 	if (bytesRead < fileInfo.st_size)
 	{
 		printf( "Failed to read contents of %s (%lu requested, %d read, errno=%d: %s)\n",
-			svgPath, fileInfo.st_size, bytesRead, errno, strerror(errno) );
+			svgPath, fileInfo.st_size, (int) bytesRead, errno, strerror(errno) );
 		fclose( f );
 		return -1;
 	}
@@ -316,7 +316,7 @@ int LicutSVG::ParseTag( char *& s, int stackLevel, char *tagStack[1024], bool ig
 					if (!strcmp( attrName, "d" ) && attrValue != NULL)
 					{
 						int setsParsed = ParseDrawList( attrValue );
-						printf( "path d len=%d sets=%d\n", strlen(attrValue), setsParsed );
+						printf( "path d len=%d sets=%d\n", (int) strlen(attrValue), setsParsed );
 					}
 				}
 			}

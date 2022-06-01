@@ -1,5 +1,13 @@
 How to build (requires gcc)
 
+Required libraries: `gflags`
+
+To install that from Ubuntu / Debian / Raspbian:
+
+```bash
+sudo apt install libgflags-dev
+```
+
 make
 
 Building for arm-linux (requires arm-linux-gcc toolchain)

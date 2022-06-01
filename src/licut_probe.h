@@ -9,6 +9,6 @@ public:
 	static const char *Errmsg() { return errmsg; }
 
 protected:
-	static char errmsg[256];
+	static char errmsg[512];
 };
 

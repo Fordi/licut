@@ -94,8 +94,8 @@ int main( int argc, char *argv[] )
 	}
 	if (FLAGS_xxtea_unittest)
 	{
-		printf( "Running unit test with input value 0x%08lx\n", FLAGS_xxtea_unittest );
-		uint32_t v[3] = {FLAGS_xxtea_unittest,0,0};
+		printf( "Running unit test with input value 0x%08dx\n", FLAGS_xxtea_unittest );
+		uint32_t v[3] = {(uint32_t) FLAGS_xxtea_unittest,0,0};
 		uint32_t k1[] = { 0x272D6C37, 0x342A6173, 0x3663255B, 0x2B265A4D };
 		uint32_t k2[] =/*KEY1 -*/{ 0x7D316E22, 0x4A4A7133, 0x5A3C5C5F, 0x78613A61 };
 		uint32_t k3[] =/*KEY2 -*/{ 0x47302A23, 0x5D31482F, 0x3B257A61, 0x3671382F };

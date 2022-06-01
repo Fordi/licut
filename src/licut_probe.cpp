@@ -15,7 +15,7 @@
 
 #include "licut_probe.h"
 
-char LicutProbe::errmsg[256] = {0};
+char LicutProbe::errmsg[512] = {0};
 
 int LicutProbe::Open( int verbose /*= 0*/ )
 {
@@ -69,12 +69,16 @@ int LicutProbe::Open( int verbose /*= 0*/ )
 					while (struct dirent *d = readdir( class_dir ))
 					{
 						if (d->d_name[0] == '.') continue;
-						if (verbose) printf( "%s/%s\n", class_dirname, d->d_name );
-                        if (!strncmp( d->d_name, "ttyACM1", 6 ))
+						if (verbose)
+						{
+
+							printf( "%s/%s\n", class_dirname, d->d_name );
+						}
+            if (!strncmp( d->d_name, "ttyACM1", 6 ))
 						{
 							found_devname = true;
 							endpoint = test_ep;
-							sprintf( devpath, "/dev/%s", d->d_name );
+							sprintf( devpath, "/dev/%.128s", d->d_name );
 							break;
 						}
 					}
