@@ -12,3 +12,11 @@ protected:
 	static char errmsg[512];
 };
 
+#define KNOWN_IDS_SIZE 2
+
+int KNOWN_IDS[KNOWN_IDS_SIZE] = {
+	0x20d30011,
+	0x20d30028
+};
+
+#define USB_DEV_ROOT "/sys/bus/usb/devices"

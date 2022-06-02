@@ -17,97 +17,103 @@
 
 char LicutProbe::errmsg[512] = {0};
 
-int LicutProbe::Open( int verbose /*= 0*/ )
-{
-	// Determine tty
-	// Get lsusb -v output
-	FILE *lsusb = popen( "lsusb -v 2> /dev/null", "r" );
-	if (!lsusb)
-	{
-		sprintf( errmsg, "Failed to open lsusb -v (%d: %s)\n", errno, strerror(errno) );
+
+int get_usb_id(char* usbPath) {
+	char propPath[256];
+	int vendor = 0;
+	int product = 0;
+	FILE* propFile;
+
+	sprintf(propPath, "%s/idVendor", usbPath);
+	
+	propFile = fopen(propPath, "r");
+	if (propFile == NULL) return 0;
+	fscanf(propFile, "%4x", &vendor);
+	fclose(propFile);
+
+	sprintf(propPath, "%s/idProduct", usbPath);
+	propFile = fopen(propPath, "r");
+	if (propFile == NULL) return 0;
+	fscanf(propFile, "%4x", &product);
+	fclose(propFile);
+	return (vendor << 16) + product;
+}
+
+char ttyName[256];
+char usbSysPath[256];
+
+
+int find_attached_cricut(int verbose = 0) {
+	char syspath[256];
+	DIR* usbDevs = opendir(USB_DEV_ROOT);
+
+	if (usbDevs == NULL) {
+		puts("Unable to read /sys/bus/usb; are you on Linux?\n");
 		return -1;
 	}
-
-	char buff[1024];
-	bool found_ftdi = false;
-	bool in_ftdi = false;
-	unsigned int bus, device, endpoint;
-	bool found_devname = false;
-	char devpath[256];
-	if (verbose) printf( "Opened lsusb -v\n" );
-	while (fgets( buff, sizeof(buff), lsusb ) && !found_devname)
-	{
-		// Pared down search from "ID 20d3:0011 Future Technology Devices International"
-		if (!in_ftdi && !found_ftdi && strstr( buff, "ID 20d3:0011" ))
-		{
-			in_ftdi = true;
-			found_ftdi = true;
-			endpoint = 0;
-			sscanf( buff, "Bus %u Device %u", &bus, &device );
-			if (verbose) printf( "Found FTDI entry bus %u device %u\n", bus, device );
+	struct dirent* entry;
+	char usbPath[256];
+	struct stat propStat;
+	while (entry = readdir(usbDevs)) {
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+			continue;
 		}
-		else if (in_ftdi && !strncmp( buff, "Bus ", 4 ))
-		{
-			in_ftdi = false;
+		sprintf(usbPath, "%s/%.128s", USB_DEV_ROOT, entry->d_name);
+		int usbId = get_usb_id(usbPath);
+		if (usbId == 0) continue;
+		if (verbose > 0) {
+			printf("Checking %s (%04x:%04x)\n", entry->d_name, usbId >> 16, usbId & 0xFFFF);
 		}
-
-		if (!in_ftdi) continue;
-
-		if (strstr( buff, "bEndpointAddress" ))
-		{
-			unsigned int test_ep;
-			if (sscanf( buff, " bEndpointAddress 0x%x", &test_ep ) == 1)
-			{
-				char class_dirname[256];
-				sprintf( class_dirname, "/sys/class/usb_endpoint/usbdev%u.%u_ep%02x/device", bus, device, test_ep );
-				if (verbose) printf( "%s() lsusb -v output line: %s\nScanned endpoint %x\nOpening %s\n",
-					__FUNCTION__, buff, test_ep, class_dirname );
-				DIR *class_dir = opendir( class_dirname );
-				if (!class_dir) printf( "%s() - failed to open dir %s\n", __FUNCTION__, class_dirname );
-				else
-				{
-					while (struct dirent *d = readdir( class_dir ))
-					{
-						if (d->d_name[0] == '.') continue;
-						if (verbose)
-						{
-
-							printf( "%s/%s\n", class_dirname, d->d_name );
-						}
-            if (!strncmp( d->d_name, "ttyACM1", 6 ))
-						{
-							found_devname = true;
-							endpoint = test_ep;
-							sprintf( devpath, "/dev/%.128s", d->d_name );
-							break;
-						}
+		for (int i = 0; i < KNOWN_IDS_SIZE; i++) {
+			if (usbId == KNOWN_IDS[i]) {
+				printf("ID match, looking for tty\n");
+				DIR* subDir = opendir(usbPath);
+				struct dirent* sub;
+				while (sub = readdir(subDir)) {
+					if (strcmp(sub->d_name, ".") == 0 || strcmp(sub->d_name, "..") == 0) {
+						continue;
 					}
-					closedir( class_dir );
+					DIR* ttys;
+					struct dirent* tty;
+					char ttyPath[256];
+
+					sprintf(ttyPath, "%.96s/%.96s/tty", usbPath, sub->d_name);
+					ttys = opendir(ttyPath);
+					if (ttys == NULL) continue;
+					while (tty = readdir(ttys)) {
+						if (strcmp(tty->d_name, ".") == 0 || strcmp(tty->d_name, "..") == 0) {
+							continue;
+						}
+						closedir(ttys);
+						closedir(subDir);
+						closedir(usbDevs);
+						sprintf(ttyName, "%s", tty->d_name);
+						sprintf(usbSysPath, "%s", usbPath);
+						return 0;
+					}
+					closedir(ttys);
 				}
+				closedir(subDir);
 			}
-			else
-			{
-				printf( "%s() - failed to scan address from %s", __FUNCTION__, buff );
-			}
-		}
+		}		
 	}
+	closedir(usbDevs);
+	return 1;
+}
 
-	pclose( lsusb );
-
-	if (!found_devname)
-	{
-		if (found_ftdi)
-		{
-            printf( "Found FTDI USB serial port but no endpoint - assuming /dev/ttyACM1\n" );
-            sprintf( devpath, "/dev/ttyACM1" );
-		}
-		else
-		{
-			sprintf( errmsg, "Could not find FTDI USB serial device - is the device turned on and connected?" );
-			return 0;
-		}
+int LicutProbe::Open( int verbose /*= 0*/ )
+{
+	char devpath[256];
+	bool found_devname = false;
+	if (find_attached_cricut(verbose) == 0) {
+		printf("Found tty: %s in %s\n", ttyName, usbSysPath);
+		found_devname = true;
+		sprintf(devpath, "/dev/%.128s", ttyName);
 	}
-
+	if (!found_devname) {
+		sprintf(errmsg, "Couldn't locate known Cricut device on USB.  Is it connected?\n");
+		return -1;
+	}
 	int handle = open( devpath, O_RDWR | O_NOCTTY );
 	if (handle <= 0)
 	{
@@ -122,20 +128,21 @@ int LicutProbe::Open( int verbose /*= 0*/ )
         tcgetattr( handle, &oldtio ); /* save current port settings */
     
 	if (verbose) printf( "setting parameters\n" );
-        bzero( &newtio, sizeof(newtio) );
+
+	bzero( &newtio, sizeof(newtio) );
 	// Set custom rate to 200kbps 8N1 - we're actually sending 8N2 but get 8N1 back
-        newtio.c_cflag = B38400 | /*CRTSCTS |*/ CS8 | CLOCAL | CREAD;
-        newtio.c_iflag = IGNPAR;
-        newtio.c_oflag = 0;
-        
-        /* set input mode (non-canonical, no echo,...) */
-        newtio.c_lflag = 0;
-         
-        newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
-        newtio.c_cc[VMIN]     = 5;   /* blocking read until 5 chars received */
-        
-        tcflush( handle, TCIFLUSH );
-        tcsetattr( handle, TCSANOW, &newtio );
+	newtio.c_cflag = B38400 | /*CRTSCTS |*/ CS8 | CLOCAL | CREAD;
+	newtio.c_iflag = IGNPAR;
+	newtio.c_oflag = 0;
+	
+	/* set input mode (non-canonical, no echo,...) */
+	newtio.c_lflag = 0;
+		
+	newtio.c_cc[VTIME]    = 0;   /* inter-character timer unused */
+	newtio.c_cc[VMIN]     = 5;   /* blocking read until 5 chars received */
+	
+	tcflush( handle, TCIFLUSH );
+	tcsetattr( handle, TCSANOW, &newtio );
 
 	// Now use TIOCSSERIAL ioctl to set custom divisor
 	// FTDI uses base_baud 24000000 so in theory a divisor
